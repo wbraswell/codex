@@ -1,7 +1,7 @@
 <h1 align="center">OpenAI Codex CLI</h1>
 <p align="center">Lightweight coding agent that runs in your terminal</p>
 
-<p align="center"><code>npm i -g @openai/codex</code></p>
+<p align="center"><code>cpanm .</code> or <code>dzil install</code> (requires Dist::Zilla)</p>
 
 ![Codex demo GIF using: codex "explain this codebase to me"](./.github/demo.gif)
 
@@ -53,11 +53,12 @@ Codex CLI is an experimental project under active development. It is not yet sta
 Help us improve by filing issues or submitting PRs (see the section below for how to contribute)!
 
 ## Quickstart
-
-Install globally:
+Install via CPAN:
 
 ```shell
-npm install -g @openai/codex
+cpanm .
+# or if using Dist::Zilla:
+dzil install
 ```
 
 Next, set your OpenAI API key as an environment variable:
@@ -71,7 +72,11 @@ export OPENAI_API_KEY="your-api-key-here"
 Run interactively:
 
 ```shell
-codex
+codex cluster-prompts --help
+```
+Or use the `cluster-prompts` example:
+```shell
+codex cluster-prompts --csv prompts.csv
 ```
 
 Or, run with a prompt as input (and optionally in `Full Auto` mode):
@@ -161,14 +166,13 @@ Both approaches are _transparent_ to everyday usage – you still run `codex` fr
 
 ## CLI Reference
 
-| Command                              | Purpose                             | Example                              |
-| ------------------------------------ | ----------------------------------- | ------------------------------------ |
-| `codex`                              | Interactive REPL                    | `codex`                              |
-| `codex "…"`                          | Initial prompt for interactive REPL | `codex "fix lint errors"`            |
-| `codex -q "…"`                       | Non‑interactive "quiet mode"        | `codex -q --json "explain utils.ts"` |
-| `codex completion <bash\|zsh\|fish>` | Print shell completion script       | `codex completion bash`              |
+| Command                                      | Purpose                               | Example                                           |
+| -------------------------------------------- | ------------------------------------- | ------------------------------------------------- |
+| `codex cluster-prompts [options]`            | Analyze text prompts (Perl example)   | `codex cluster-prompts --csv prompts.csv`         |
+| `codex apply-patch < patch.txt`              | Apply a textual patch to files        | `codex apply-patch < mypatch.txt`                 |
+| `codex exec <cmd>`                           | Execute a shell command in sandbox    | `codex exec ls -la`                                |
 
-Key flags: `--model/-m`, `--approval-mode/-a`, and `--quiet/-q`.
+Options match the Perl example parameters (e.g., `--csv`, `--cluster-method`, `--output-md`, etc.).
 
 ---
 
@@ -186,14 +190,14 @@ Disable with `--no-project-doc` or `CODEX_DISABLE_PROJECT_DOC=1`.
 
 ## Non‑interactive / CI mode
 
-Run Codex head‑less in pipelines. Example GitHub Action step:
+Run the `cluster-prompts` script headless in pipelines. Example GitHub Action step:
 
 ```yaml
-- name: Update changelog via Codex
+- name: Analyze prompts via Codex CLI
   run: |
-    npm install -g @openai/codex
+    cpanm .                        # install dependencies
     export OPENAI_API_KEY="${{ secrets.OPENAI_KEY }}"
-    codex -a auto-edit --quiet "update CHANGELOG for next release"
+    codex cluster-prompts --csv prompts.csv --output-md report.md
 ```
 
 Set `CODEX_QUIET_MODE=1` to silence interactive UI noise.
@@ -218,40 +222,15 @@ Below are a few bite‑size examples you can copy‑paste. Replace the text in q
 
 ## Installation
 
-<details open>
-<summary><strong>From npm (Recommended)</strong></summary>
+Install from CPAN or via Dist::Zilla:
 
 ```bash
-npm install -g @openai/codex
-# or
-yarn global add @openai/codex
+# Install runtime dependencies and the CLI
+cpanm .
+# Or build and install with Dist::Zilla
+dzil build
+cpanm Codex-*.tar.gz
 ```
-
-</details>
-
-<details>
-<summary><strong>Build from source</strong></summary>
-
-```bash
-# Clone the repository and navigate to the CLI package
-git clone https://github.com/openai/codex.git
-cd codex/codex-cli
-
-# Install dependencies and build
-npm install
-npm run build
-
-# Get the usage and the options
-node ./dist/cli.js --help
-
-# Run the locally‑built CLI directly
-node ./dist/cli.js
-
-# Or link the command globally for convenience
-npm link
-```
-
-</details>
 
 ---
 

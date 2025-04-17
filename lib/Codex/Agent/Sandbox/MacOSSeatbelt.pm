@@ -14,9 +14,10 @@ Codex::Agent::Sandbox::MacOSSeatbelt - macOS seatbelt sandbox stub
 =cut
 
 sub exec_with_seatbelt {
-    my ($cmd, $opts, $writableRoots, $abortSignal) = @_;
-    # TODO: implement macOS seatbelt sandboxed execution
-    die "exec_with_seatbelt not implemented";
+    my ($cmd_aref, $opts, $writableRoots, $abortSignal) = @_;
+    # Fallback to raw exec for now
+    require Codex::Agent::Sandbox::RawExec;
+    return Codex::Agent::Sandbox::RawExec::exec($cmd_aref, $opts, $writableRoots, $abortSignal);
 }
 
 1;

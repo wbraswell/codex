@@ -1,34 +1,47 @@
 package Codex::Config;
 use strict;
 use warnings;
+# Allow bareword constants declarations without strict subs checking
+no strict qw(subs);
 use Exporter 'import';
 use JSON;
-use YAML::XS qw(Load Dump);
+## Load YAML::XS optionally (only needed if YAML config paths are used)
+eval {
+    require YAML::XS;
+    YAML::XS->import(qw(Load Dump));
+    1;
+};
 use File::Spec;
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
 use Cwd qw(getcwd);
 
-our @EXPORT_OK = qw(
-    load_config
-    save_config
+our @EXPORT_OK = (
+    # Core functions
+    qw(load_config save_config),
+    # Constants
+    qw(
+        DEFAULT_AGENTIC_MODEL
+        DEFAULT_FULL_CONTEXT_MODEL
+        DEFAULT_INSTRUCTIONS
+        PROJECT_DOC_MAX_BYTES
+    ),
 );
 
-use constant {
-    DEFAULT_AGENTIC_MODEL      => 'o4-mini',
-    DEFAULT_FULL_CONTEXT_MODEL => 'gpt-4.1',
-    DEFAULT_INSTRUCTIONS       => '',
-    PROJECT_DOC_MAX_BYTES      => 32 * 1024,
-};
+## Define constants as prototype subs to avoid strict subs issues
+sub DEFAULT_AGENTIC_MODEL ()      { 'o4-mini' }
+sub DEFAULT_FULL_CONTEXT_MODEL () { 'gpt-4.1' }
+sub DEFAULT_INSTRUCTIONS ()       { '' }
+sub PROJECT_DOC_MAX_BYTES ()      { 32 * 1024 }
 
-use constant {
-    CONFIG_DIR            => File::Spec->catdir($ENV{HOME} || '', '.codex'),
-    CONFIG_JSON_FILEPATH  => File::Spec->catfile(CONFIG_DIR, 'config.json'),
-    CONFIG_YAML_FILEPATH  => File::Spec->catfile(CONFIG_DIR, 'config.yaml'),
-    CONFIG_YML_FILEPATH   => File::Spec->catfile(CONFIG_DIR, 'config.yml'),
-    CONFIG_FILEPATH       => CONFIG_JSON_FILEPATH,
-    INSTRUCTIONS_FILEPATH => File::Spec->catfile(CONFIG_DIR, 'instructions.md'),
-};
+sub CONFIG_DIR ()            { File::Spec->catdir($ENV{HOME} || '', '.codex') }
+sub CONFIG_JSON_FILEPATH ()  { File::Spec->catfile(CONFIG_DIR, 'config.json') }
+sub CONFIG_YAML_FILEPATH ()  { File::Spec->catfile(CONFIG_DIR, 'config.yaml') }
+sub CONFIG_YML_FILEPATH ()   { File::Spec->catfile(CONFIG_DIR, 'config.yml') }
+sub CONFIG_FILEPATH ()       { CONFIG_JSON_FILEPATH }
+sub INSTRUCTIONS_FILEPATH () { File::Spec->catfile(CONFIG_DIR, 'instructions.md') }
+# Re-enable strict subs
+use strict qw(subs);
 
 use constant EMPTY_STORED_CONFIG => { model => '' };
 use constant EMPTY_CONFIG_JSON   => JSON->new->canonical->pretty->encode({ model => '' });

@@ -3,7 +3,7 @@ use warnings;
 use File::Temp qw(tempdir);
 use File::Spec;
 use File::Path qw(make_path);
-use Test::More tests => 4;
+use Test::More tests => 5;
 use lib qw(../lib);
 use Codex::Config qw(load_config PROJECT_DOC_MAX_BYTES DEFAULT_AGENTIC_MODEL DEFAULT_INSTRUCTIONS);
 
