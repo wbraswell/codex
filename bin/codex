@@ -1,0 +1,9 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use Perl::Types qw(void boolean integer nonsigned_integer number character string hash hashref array arrayref);
+use Codex::CLI;
+
+Codex::CLI::run();
