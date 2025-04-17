@@ -141,13 +141,9 @@ The hardening mechanism Codex uses depends on your OS:
   - Outbound network is _fully blocked_ by default – even if a child process
     tries to `curl` somewhere it will fail.
 
-- **Linux** – we recommend using Docker for sandboxing, where Codex launches itself inside a **minimal
-  container image** and mounts your repo _read/write_ at the same path. A
-  custom `iptables`/`ipset` firewall script denies all egress except the
-  OpenAI API. This gives you deterministic, reproducible runs without needing
-  root on the host. You can read more in [`run_in_container.sh`](./codex-cli/scripts/run_in_container.sh)
+On other platforms, sandboxing is not enforced; commands are executed without isolation.
 
-Both approaches are _transparent_ to everyday usage – you still run `codex` from your repo root and approve/reject steps as usual.
+The sandboxing mechanism (where available) is _transparent_ to everyday usage – you still run `codex` from your repo root and approve/reject steps as usual.
 
 ---
 
@@ -156,11 +152,10 @@ Both approaches are _transparent_ to everyday usage – you still run `codex` fr
 | Requirement                 | Details                                                         |
 | --------------------------- | --------------------------------------------------------------- |
 | Operating systems           | macOS 12+, Ubuntu 20.04+/Debian 10+, or Windows 11 **via WSL2** |
-| Node.js                     | **22 or newer** (LTS recommended)                               |
+| Perl                        | **v5.28 or newer**                                              |
 | Git (optional, recommended) | 2.23+ for built‑in PR helpers                                   |
 | RAM                         | 4‑GB minimum (8‑GB recommended)                                 |
 
-> Never run `sudo npm install -g`; fix npm permissions instead.
 
 ---
 

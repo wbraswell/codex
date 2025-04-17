@@ -101,6 +101,8 @@ sub run {
             functions     => \\@functions,
             function_call => 'auto',
         };
+        # Throttle to avoid API rate limits
+        sleep 2;
         # Send request
         my $resp = $http->post($endpoint, {
             headers => { 'Content-Type' => 'application/json', 'Authorization' => "Bearer $api_key" },

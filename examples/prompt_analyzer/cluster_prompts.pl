@@ -1,19 +1,22 @@
 #!/usr/bin/env perl
-"""End-to-end pipeline for analysing a collection of text prompts (Perl port).
-
-Usage:
-  cluster_prompts.pl [--csv FILE] [--cache FILE] [--embedding-model MODEL]
-                         [--chat-model MODEL] [--cluster-method METHOD]
-                         [--k-max N] [--dbscan-min-samples N]
-                         [--output-md FILE] [--plots-dir DIR]
-                         [--help]
-"""
+# End-to-end pipeline for analysing a collection of text prompts (Perl port).
+#
+# Usage:
+#   cluster_prompts.pl [--csv FILE] [--cache FILE] [--embedding-model MODEL]
+#                          [--chat-model MODEL] [--cluster-method METHOD]
+#                          [--k-max N] [--dbscan-min-samples N]
+#                          [--output-md FILE] [--plots-dir DIR]
+#                          [--help]
 use strict;
 use warnings;
 use Getopt::Long qw(GetOptions);
 use Path::Tiny qw(path);
 use Text::CSV;
-use JSON;
+use JSON qw(decode_json encode_json);
+use HTTP::Tiny;
+use Algorithm::KMeans;
+use List::Util qw(sum shuffle);
+use POSIX qw(floor);
 
 sub usage {
     die <<"USAGE";
@@ -70,7 +73,211 @@ while (my $row = $csv->getline($fh)) {
 close $fh;
 
 print "Embedding ", scalar(@prompts), " prompts...\n";
-# TODO: implement embedding, clustering, labeling, plotting, report generation
 
-print "✔ Report would be written to $output_md, plots to $plots_dir/\n";
+# Ensure API key
+my $api_key = $ENV{OPENAI_API_KEY} or die "Missing OPENAI_API_KEY\n";
+# HTTP client
+my $http = HTTP::Tiny->new;
+
+# Embedding
+my $vectors_ref = load_or_create_embeddings(\@prompts, cache_path => $cache_file, model => $embed_model, http => $http, api_key => $api_key);
+
+# Clustering via KMeans
+my ($labels_ref, $best_k, $best_score) = cluster_kmeans($vectors_ref, $k_max);
+my @labels = @$labels_ref;
+
+# Label clusters via LLM
+my $meta_ref = label_clusters(\@prompts, \@labels, $chat_model, http => $http, api_key => $api_key);
+
+# Generate markdown report
+generate_markdown_report(\@prompts, \@labels, $meta_ref, { method => 'kmeans', k => $best_k, silhouette => $best_score }, $output_md);
+
+print "✔ Report written to $output_md\n";
 exit 0;
+
+#-------------------------------------------------------------------------------
+# Embed texts via OpenAI, with optional JSON cache
+#-------------------------------------------------------------------------------
+sub load_or_create_embeddings {
+    my ($prompts_ref, %args) = @_;
+    my $cache_file = $args{cache_path};
+    my $model      = $args{model};
+    my $http       = $args{http};
+    my $api_key    = $args{api_key};
+
+    # Load existing cache
+    my %cache;
+    if ($cache_file && -e $cache_file) {
+        eval {
+            %cache = %{ decode_json(path($cache_file)->slurp_utf8) };
+        };
+    }
+
+    # Determine which prompts need embedding
+    my @to_embed;
+    foreach my $txt (@$prompts_ref) {
+        push @to_embed, $txt unless exists $cache{$txt};
+    }
+    # Batch embed
+    if (@to_embed) {
+        print "Embedding ", scalar(@to_embed), " new prompt(s)...\n";
+        while (@to_embed) {
+            my @batch = splice(@to_embed, 0, 100);
+            sleep 2;
+            my $resp = $http->post(
+                'https://api.openai.com/v1/embeddings',
+                {
+                    headers => {
+                        'Content-Type'  => 'application/json',
+                        'Authorization' => "Bearer $api_key",
+                    },
+                    content => encode_json({ model => $model, input => \\@batch }),
+                }
+            );
+            die "Embedding API error: $resp->{status}\n" unless $resp->{success};
+            my $j = decode_json($resp->{content});
+            foreach my $data (@{ $j->{data} }) {
+                my $i = $data->{index};
+                $cache{ $batch[$i] } = $data->{embedding};
+            }
+        }
+        # Persist cache
+        if ($cache_file) {
+            path($cache_file)->parent->mkpath;
+            path($cache_file)->spew_utf8(encode_json(\%cache));
+        }
+    }
+    # Build matrix in input order
+    my @matrix = map { $cache{$_} } @$prompts_ref;
+    return \@matrix;
+}
+
+#-------------------------------------------------------------------------------
+# Auto-k KMeans clustering (uses Algorithm::KMeans), returns labels, k, score
+#-------------------------------------------------------------------------------
+sub cluster_kmeans {
+    my ($matrix_ref, $k_max) = @_;
+    # Use k_max clusters (silhouette optimization omitted)
+    my $k = $k_max < 2 ? 1 : $k_max;
+    my $km = Algorithm::KMeans->new(data => $matrix_ref, k => $k);
+    my ($centroids, $clusters) = $km->kmeans;
+    # clusters: hash of cluster_id => [indices]
+    my @labels = ();
+    # initialize labels to zero
+    @labels[0 .. $#$matrix_ref] = (0) x @$matrix_ref;
+    while (my ($cluster_id, $points) = each %$clusters) {
+        foreach my $idx (@$points) {
+            $labels[$idx] = $cluster_id;
+        }
+    }
+    print "K-Means clustered into k=$k clusters.\n";
+    return (\@labels, $k, 0);
+}
+
+#-------------------------------------------------------------------------------
+# Label clusters via Chat Completions
+#-------------------------------------------------------------------------------
+sub label_clusters {
+    my ($prompts_ref, $labels_ref, %args) = @_;
+    my $chat_model = $args{chat_model};
+    my $http       = $args{http};
+    my $api_key    = $args{api_key};
+    # Group prompts by label
+    my %group;
+    for my $i (0 .. $#$labels_ref) {
+        push @{ $group{ $labels_ref->[$i] } }, $prompts_ref->[$i];
+    }
+    my %meta;
+    foreach my $lbl (sort { $a <=> $b } keys %group) {
+        if ($lbl == -1) {
+            $meta{$lbl} = {
+                name        => 'Noise / Outlier',
+                description => 'Prompts that do not cleanly belong to any cluster.',
+            };
+            next;
+        }
+        # sample up to 12 examples
+        my @ex = shuffle @{ $group{$lbl} };
+        splice(@ex, 12) if @ex > 12;
+        # build user prompt
+        my $user_content =
+            "The following text snippets are all part of the same semantic cluster.\n"
+          . "Please propose:\n"
+          . "1. A very short title (<= 4 words).\n"
+          . "2. A concise 2-3 sentence description.\n"
+          . "Answer strictly as JSON with keys 'name' and 'description'.\n\n"
+          . "Snippets:\n"
+          . join('', map { "- $_\n" } @ex);
+        # call API
+        sleep 2;
+        my $resp = $http->post(
+            'https://api.openai.com/v1/chat/completions',
+            {
+                headers => {
+                    'Content-Type'  => 'application/json',
+                    'Authorization' => "Bearer $api_key",
+                },
+                content => encode_json({ model => $chat_model, messages => [
+                    { role => 'system', content => 'You are an expert analyst, competent in summarising text clusters succinctly.' },
+                    { role => 'user',   content => $user_content },
+                ]}),
+            }
+        );
+        my $body = decode_json($resp->{content});
+        my $reply = $body->{choices}[0]{message}{content} // '';
+        # extract JSON payload
+        my ($json_str) = $reply =~ /({.*})/s;
+        my $obj = eval { decode_json($json_str // '{}') };
+        $meta{$lbl} = {
+            name        => substr($obj->{name} // 'Unnamed', 0, 60),
+            description => $obj->{description} // '',
+        };
+    }
+    return \%meta;
+}
+
+#-------------------------------------------------------------------------------
+# Generate Markdown report file
+#-------------------------------------------------------------------------------
+sub generate_markdown_report {
+    my ($prompts_ref, $labels_ref, $meta_ref, $outputs_ref, $path_md) = @_;
+    # counts per cluster
+    my %counts;
+    $counts{$_}++ for @$labels_ref;
+    my @clusters = sort { $a <=> $b } keys %counts;
+    # header
+    my @lines;
+    push @lines, "# Prompt Clustering Report\n";
+    my $ts = POSIX::strftime("%Y-%m-%d %H:%M:%S", localtime);
+    push @lines, "Generated by `cluster_prompts.pl` – $ts\n";
+    # overview
+    push @lines, "## Overview\n";
+    push @lines, "* Total prompts: **" . scalar(@$labels_ref) . "**";
+    push @lines, "* Clustering method: **" . $outputs_ref->{method} . "**";
+    push @lines, "* k (K-Means): **" . $outputs_ref->{k} . "**";
+    push @lines, "* Silhouette score: **" . sprintf("%.3f", $outputs_ref->{silhouette}) . "**\n";
+    # summary table
+    push @lines, "| label | name | #prompts | description |";
+    push @lines, "|-------|------|---------:|-------------|";
+    for my $lbl (@clusters) {
+        my $m = $meta_ref->{$lbl};
+        push @lines, sprintf("| %d | %s | %d | %s |",
+            $lbl, $m->{name}, $counts{$lbl}, $m->{description});
+    }
+    # detailed clusters
+    for my $lbl (@clusters) {
+        push @lines, "\n---\n";
+        my $m = $meta_ref->{$lbl};
+        push @lines, sprintf("### Cluster %d: %s (%d prompts)\n",
+            $lbl, $m->{name}, $counts{$lbl});
+        push @lines, "$m->{description}\n";
+        # examples
+        my @ex = @{$prompts_ref}[@{ [ grep { $labels_ref->[$_] == $lbl } 0 .. $#$labels_ref ] }];
+        @ex = @ex[0..4] if @ex > 5;
+        push @lines, "Examples:\n";
+        push @lines, map { "* $_" } @ex;
+    }
+    # write file
+    path($path_md)->parent->mkpath;
+    path($path_md)->spew_utf8(join("\n", @lines) . "\n");
+}
