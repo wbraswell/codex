@@ -5,3 +5,8 @@ requires 'Path::Tiny'    => '0.118';
 requires 'Text::CSV'     => '2.00';
 requires 'Algorithm::KMeans';
 requires 'YAML::XS'      => '0.89';
+requires 'String::ShellQuote' => '1.04';
+requires 'File::Slurp'       => '9999.24';
+requires 'MIME::Base64'      => '3.15';
+requires 'File::Type'        => '1.40';
+requires 'Curses'            => '1.51';

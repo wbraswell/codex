@@ -1,0 +1,1 @@
+I pressed ESC ESC to stop the current reasoning, then when I issued my next command it immediately crashed with the `invalid_request_error` code.

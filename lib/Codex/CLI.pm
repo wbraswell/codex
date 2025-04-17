@@ -14,6 +14,7 @@ use File::Spec;
 use Getopt::Long qw(GetOptionsFromArray);
 use HTTP::Tiny;
 use JSON;
+use Codex::TUI;
 
 sub run {
     my %opts;
@@ -80,6 +81,8 @@ sub run {
     }
     # Default: treat arguments as prompt text and enter interactive agent loop
     my $prompt = join(' ', @argv);
+    # Initialize terminal UI
+    my $tui = Codex::TUI->new();
     my $api_key = $ENV{OPENAI_API_KEY} or die "Missing OPENAI_API_KEY environment variable\n";
     my $http     = HTTP::Tiny->new;
     my $endpoint = 'https://api.openai.com/v1/chat/completions';
@@ -102,7 +105,7 @@ sub run {
             function_call => 'auto',
         };
         # Throttle to avoid API rate limits
-        sleep 2;
+        sleep 5;
         # Send request
         my $resp = $http->post($endpoint, {
             headers => { 'Content-Type' => 'application/json', 'Authorization' => "Bearer $api_key" },
@@ -139,9 +142,12 @@ sub run {
         }
         # Regular assistant message
         my $content = $msg->{content} // '';
-        print "$content\n";
+        # Display via Curses-based TUI
+        $tui->display($content);
         last;
     }
+    # Tear down UI
+    $tui->finish();
 }
 1;
 
