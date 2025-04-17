@@ -217,14 +217,28 @@ Below are a few bite‑size examples you can copy‑paste. Replace the text in q
 
 ## Installation
 
-Install from CPAN or via Dist::Zilla:
-
-```bash
-# Install runtime dependencies and the CLI
-cpanm .
-# Or build and install with Dist::Zilla
 dzil build
-cpanm Codex-*.tar.gz
+Install system and Perl dependencies, then the CLI:
+
+On Debian/Ubuntu:
+```bash
+sudo apt-get update
+sudo apt-get install libgsl-dev
+```
+
+On CentOS/RHEL:
+```bash
+sudo yum install gsl gsl-devel
+```
+
+Install Perl modules and CLI (skip tests for some modules):
+```bash
+# Install runtime dependencies (skip tests for problematic modules)
+cpanm --notest --installdeps .
+# Install the CLI from CPAN or local Dist::Zilla build:
+cpanm .
+# Or via Dist::Zilla build
+dzil build && cpanm Codex-*.tar.gz
 ```
 
 ---
