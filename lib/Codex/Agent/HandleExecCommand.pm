@@ -15,8 +15,19 @@ Codex::Agent::HandleExecCommand - Stub for handle_exec_command
 
 sub handle_exec_command {
     my (%args) = @_;
-    # TODO: implement execution and policy logic
-    die "handle_exec_command not implemented";
+    # Default execution: run the command and capture output
+    my $cmd_ref = $args{command} // [];
+    my $output = '';
+    if (ref $cmd_ref eq 'ARRAY' && @$cmd_ref) {
+        # join command array into a string and execute
+        my $cmd_str = join(' ', @$cmd_ref);
+        $output = `$cmd_str 2>&1`;
+    }
+    return {
+        outputText      => $output,
+        metadata        => { exitCode => ($? >> 8) },
+        additionalItems => [],
+    };
 }
 
 1;

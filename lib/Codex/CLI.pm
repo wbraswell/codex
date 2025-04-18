@@ -18,6 +18,12 @@ use JSON;
 sub run {
     my %opts;
     my @argv = @_ ? @_ : @ARGV;
+    # Handle 'singlepass' subcommand before global options
+    if ($argv[0] && $argv[0] eq 'singlepass') {
+        shift @argv;
+        require Codex::SinglePass;
+        return Codex::SinglePass::run_singlepass(@argv);
+    }
     # Global options: help and model
     my ($help, $model) = (undef, 'gpt-3.5-turbo');
     GetOptionsFromArray(
