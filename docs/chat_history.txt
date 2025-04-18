@@ -389,3 +389,21 @@ codex
     • Begin porting (or writing new) TAP tests for the TUI and CLI behaviors.
 
     Let me know where you’d like to go from here!
+
+...
+
+codex
+    I’ve reviewed the single‐pass CLI in TypeScript (cli_singlepass.tsx) and the core app.tsx. To fully mirror
+    existing functionality, next we need to:
+
+    • Port the SinglePassApp component (from src/components/singlepass-cli-app.tsx) into a Perl subcommand under
+    Codex::CLI, e.g. a singlepass action that drives the existing non‐interactive, single‐shot flow.
+    • Create a Perl module under lib/Codex/SinglePass.pm (or under Codex::CLI namespace) that encapsulates what
+    SinglePassApp does: read prompt/file args, call the agent loop once, print output, and exit.
+    • Expose it in bin/codex via a --singlepass flag or a new singlepass subcommand so it matches the TypeScript
+    CLI interface.
+
+    Do you want me to port the SinglePass “single‐shot” mode next, or instead begin translating the TypeScript
+    tests in codex-cli/tests/ into TAP under t/?
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ please convert the TypeScript tests first, then the SinglePass mode next
