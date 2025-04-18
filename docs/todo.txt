@@ -12,3 +12,11 @@
 - enable the usage of local LLMs (via llama.cpp?) in addition to the current functionality of only remote LLMs via OpenAI API
 
 - preserve full work history between runs of `codex`, to avoid having to awkwardly try to pick back up from where we left off during crash or accidental exit
+
+- enable up and down keys for scrolling back to previous chat history entries, like how `.bash_history` works
+
+- enable shift-enter to insert newline in chat
+
+- enable ctrl-left and ctrl-right for moving one word at a time in chat
+
+- enable mouse support for clicking to move text cursor location in chat

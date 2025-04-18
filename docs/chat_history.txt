@@ -261,3 +261,131 @@ codex
     `dzil install`).
 
     Let me know if you’d like me to dive into the TUI overlays next (or tackle any other piece first).
+
+...
+
+codex
+    I’m ready to pick up right where we left off and dive into the Curses‐based TUI next. Here’s the plan:
+
+      • Flesh out lib/Codex/TUI.pm
+        – Initialize a full‐screen Curses session
+        – Split the screen into a scrolling “history” pane and a fixed‐height input pane
+        – Provide methods to
+          • add a new message to history
+          • prompt for input (with echo/ noecho)
+          • show “approval”, “help” and “model‐info” overlays
+
+      • Port each of our React/Ink components into small Perl packages under Codex::TUI::… (e.g. History.pm,
+    Typeahead.pm, Approval.pm)
+
+      • Wire them into the main TUI so that, e.g., when we enter approval mode we draw the approval overlay on
+    top of the history/input panes.
+
+    Once that’s in place we can run through our examples (dzil test) to make sure the runners still work, then
+    move on to porting the JS/TS test suite into TAP under t/.
+
+    Shall I go ahead and start by laying out lib/Codex/TUI.pm, or would you prefer I tackle something else first?
+
+user
+yes please proceed with the current plan
+
+...
+
+codex
+    I’ve overhauled the core TUI to be a full‐screen layout manager, and sketched out the three main components
+    under Codex::TUI:: (History, Typeahead, Approval).
+
+    Next steps (after you take a look / give feedback) will be wiring in the other overlays (Help, ModelInfo),
+    connecting the Typeahead into a true “live” input loop, and then updating the CLI run loop to drive the new
+    prompt().
+
+    Below is a summary of the changes:
+
+    • lib/Codex/TUI.pm
+      – new() now divides the screen into a scrollable history pane and a fixed input pane, and instantiates
+    History, Typeahead, and Approval objects
+      – display() pushes into the History component and redraws
+      – prompt_input() is the stub for a live input + typeahead interaction (currently reads a line, updates the
+    Typeahead component)
+      – added show_help(), show_model_info(), show_approval() stubs
+
+    • lib/Codex/TUI/History.pm
+      – collects all messages, keeps only the last N to fill the history pane
+      – draw() paints the visible window
+
+    • lib/Codex/TUI/Typeahead.pm
+      – holds a list of completions, filters by current input prefix
+      – draw() can render the top few suggestions
+
+    • lib/Codex/TUI/Approval.pm
+      – displays a patch in a centered popup, waits for Y/N, and returns a boolean
+
+    Let me know how this looks before I tackle the live‐input event loop and the Help/ModelInfo overlays!
+
+...
+
+codex
+    I’ve scaffolded the core TUI and its three overlay components. Next I’ll wire up the live‐input event loop
+    and help/model‑info overlays, then hook this into the CLI’s run‑loop so prompts flow through the new TUI.
+    Here’s the plan:
+
+      • Complete prompt_input() in Codex::TUI to read keystrokes, update Typeahead, and return on Enter.
+      • Implement show_help() and show_model_info() to display centered popups (similar to Approval).
+      • In Codex::CLI::run(), replace the one‐shot display/finish with a loop:
+        – Render history + prompt_input() for next user message
+        – Append to messages and call OpenAI
+        – On function_call, run overlays as needed (e.g. call show_approval())
+        – Display assistant reply, repeat until user quits
+
+    I’ll push the prompt_input(), Help.pm, ModelInfo.pm, and CLI wiring next. Let me know if you’d like any
+    tweaks to the TUI internals first!
+
+...
+
+codex
+    I’ve added the interactive prompt loop, help/model‐info overlays, and basic history/typeahead panes:
+
+    • Created lib/Codex/TUI/History.pm and Typeahead.pm for scrolling history and suggestion rendering.
+    • Expanded lib/Codex/TUI.pm with:
+      – prompt_input() reading keystrokes, updating typeahead, and returning on Enter
+      – show_help() & show_model_info() rendering centered popups
+      – Internal redraw and input drawing helpers
+    • Updated lib/Codex/CLI.pm to drive the TUI:
+      – Loops prompting for user input, supports :help, :model, :quit
+      – Builds messages array, calls OpenAI, handles function calls, and displays assistant replies
+
+    Next we can iterate on integrating real completions into Typeahead, add Approval overlay, and fully port the
+    JS/TS test suite into TAP. Let me know if you’d like to proceed!
+
+...
+
+codex
+    I’ve implemented the approval overlay and wired it into the interactive loop:
+
+    • Added lib/Codex/TUI/Approval.pm for a centered Y/N patch-review popup
+    • Extended lib/Codex/TUI.pm with show_approval(), and the CLI now calls it before applying any patch
+    • Updated lib/Codex/CLI.pm so that apply_patch function calls prompt for approval; if rejected, the patch is
+    not applied
+
+    Next steps:
+
+        * Integrate real completions into the Typeahead overlay
+        * Flesh out the Approval scrolling for very large diffs (optional)
+        * Port the JS/TS test suite into TAP under t/
+
+    Let me know which you’d like me to tackle first, or if you’d prefer to jump into translating the tests next.
+
+...
+
+codex
+    I’ve wired up real command completions into the typeahead overlay—now typing : followed by any letters will
+    suggest :help, :model, or :quit. The existing test suite still passes cleanly, and the TUI components are
+    ready for full integration.
+
+    Next up, we can:
+
+    • Hook in any domain‑specific completions you’d like (e.g. file paths or code snippets).
+    • Enhance the approval popup with scroll controls for larger diffs.
+    • Begin porting (or writing new) TAP tests for the TUI and CLI behaviors.
+
+    Let me know where you’d like to go from here!

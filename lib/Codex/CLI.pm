@@ -78,30 +78,42 @@ sub run {
         exec $^X, $script, @argv;
         die "Failed to exec $script: $!";
     }
-    # Default: treat arguments as prompt text and enter interactive agent loop
-    my $prompt = join(' ', @argv);
-    # Initialize terminal UI
+    # Default: interactive chat loop with Curses-based UI
     require Codex::TUI;
-    my $tui = Codex::TUI->new();
-    my $api_key = $ENV{OPENAI_API_KEY} or die "Missing OPENAI_API_KEY environment variable\n";
+    my $tui      = Codex::TUI->new();
+    my $api_key  = $ENV{OPENAI_API_KEY} or die "Missing OPENAI_API_KEY environment variable\n";
     my $http     = HTTP::Tiny->new;
     my $endpoint = 'https://api.openai.com/v1/chat/completions';
-    # Build messages with system prompt
     my @messages = (
         { role => 'system', content => "You are Codex CLI, a helpful coding assistant." },
-        { role => 'user',   content => $prompt },
     );
-    # Define available functions
     my @functions = (
-        { name => 'apply_patch', description => 'Apply a textual patch to files', parameters => { type => 'object', properties => { patch_text => { type => 'string' } }, required => ['patch_text'] } },
-        { name => 'shell',       description => 'Run a shell command', parameters => { type => 'object', properties => { command => { type => 'array', items => { type => 'string' } }, workdir => { type => 'string' }, timeout => { type => 'number' } }, required => ['command'] } },
+        { name => 'apply_patch', description => 'Apply a textual patch to files',
+          parameters => { type => 'object', properties => { patch_text => { type => 'string' } }, required => ['patch_text'] },
+        },
+        { name => 'shell', description => 'Run a shell command',
+          parameters => { type => 'object', properties => { command => { type => 'array', items => { type => 'string' } }, workdir => { type => 'string' }, timeout => { type => 'number' } }, required => ['command'] },
+        },
     );
     while (1) {
-        # Prepare request body
+        my $user_input = $tui->prompt_input();
+        last unless defined $user_input;
+        if ($user_input eq ':quit') {
+            last;
+        }
+        if ($user_input eq ':help') {
+            $tui->show_help();
+            next;
+        }
+        if ($user_input eq ':model') {
+            $tui->show_model_info($model);
+            next;
+        }
+        push @messages, { role => 'user', content => $user_input };
         my $body = {
             model         => $model,
             messages      => [@messages],
-            functions     => \\@functions,
+            functions     => \@functions,
             function_call => 'auto',
         };
         # Throttle to avoid API rate limits
@@ -116,18 +128,26 @@ sub run {
         my $msg = $res->{choices}[0]{message} || {};
         # Handle function call
         if (exists $msg->{function_call}) {
-            my $fc = $msg->{function_call};
+            my $fc   = $msg->{function_call};
             my $name = $fc->{name};
             my $args = eval { JSON->new->utf8->decode($fc->{arguments} // '{}') } || {};
             my $out;
             if ($name eq 'apply_patch') {
-                require Codex::Exec;
-                $out = Codex::Exec::exec_apply_patch(
-                    $args->{patch_text} // '',
-                    sub { my ($path) = @_; local $/; open my $fh, '<', $path or return ''; <$fh> },
-                    sub { my ($path, $content) = @_; open my $fh, '>', $path or die $!; print $fh $content },
-                    sub { my ($path) = @_; unlink $path },
-                );
+                # Prompt user to approve the patch before applying
+                my $patch_text = $args->{patch_text} // '';
+                my $approved   = $tui->show_approval($patch_text);
+                if ($approved) {
+                    require Codex::Exec;
+                    $out = Codex::Exec::exec_apply_patch(
+                        $patch_text,
+                        sub { my ($path) = @_; local $/; open my $fh, '<', $path or return ''; <$fh> },
+                        sub { my ($path, $content) = @_; open my $fh, '>', $path or die $!; print $fh $content },
+                        sub { my ($path) = @_; unlink $path },
+                    );
+                }
+                else {
+                    $out = { stdout => '', stderr => 'User rejected patch', exitCode => 1 };
+                }
             }
             elsif ($name eq 'shell') {
                 require Codex::Agent::Sandbox::RawExec;
@@ -135,16 +155,14 @@ sub run {
             } else {
                 die "Unknown function: $name\n";
             }
-            # Append assistant function result
-            push @messages, { role => 'assistant', content => undef, function_call => $fc };
-            push @messages, { role => 'function',    name    => $name, content => JSON->new->utf8->encode($out) };
+            push @messages, { role => 'assistant', function_call => $fc };
+            push @messages, { role => 'function', name => $name, content => JSON->new->utf8->encode($out) };
             next;
         }
         # Regular assistant message
         my $content = $msg->{content} // '';
-        # Display via Curses-based TUI
         $tui->display($content);
-        last;
+        push @messages, { role => 'assistant', content => $content };
     }
     # Tear down UI
     $tui->finish();
