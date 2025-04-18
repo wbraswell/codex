@@ -14,7 +14,6 @@ use File::Spec;
 use Getopt::Long qw(GetOptionsFromArray);
 use HTTP::Tiny;
 use JSON;
-use Codex::TUI;
 
 sub run {
     my %opts;
@@ -82,6 +81,7 @@ sub run {
     # Default: treat arguments as prompt text and enter interactive agent loop
     my $prompt = join(' ', @argv);
     # Initialize terminal UI
+    require Codex::TUI;
     my $tui = Codex::TUI->new();
     my $api_key = $ENV{OPENAI_API_KEY} or die "Missing OPENAI_API_KEY environment variable\n";
     my $http     = HTTP::Tiny->new;

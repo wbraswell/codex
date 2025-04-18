@@ -1,0 +1,14 @@
+- run `codex` from repo rather than system-wide installation, check if the following bugs still exist as documented in the bugs/ directory, do NOT make pull requests back to upstream `openai/codex:main` due to purposefully difficult contributor process
+    - rate limit exceeded
+    - invalid request
+    - chat history summary 
+
+- create a Perl program to automatically upgrade the `wbraswell/codex:main` git branch to pull the latest commits from the upstream `openai/codex:main` git branch, then automatically upgrade `wbraswell/codex:perl` to include all the new features and functionality converted into Perl from upstream Python/JavaScript/TypeScript
+
+- create the `wbraswell/codex:perl-extras` branch containing the `Codex::Extras` namespace, which will contain all the features and functionality we add on top of the upstream `openai/codex:main` repository
+
+- create a Perl program to automatically upgrade the `wbraswell/codex:perl-extras` git branch to be compatible with each respective upgrade to `wbraswell/codex:perl`
+
+- enable the usage of local LLMs (via llama.cpp?) in addition to the current functionality of only remote LLMs via OpenAI API
+
+- preserve full work history between runs of `codex`, to avoid having to awkwardly try to pick back up from where we left off during crash or accidental exit
